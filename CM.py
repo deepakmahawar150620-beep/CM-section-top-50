@@ -5,25 +5,51 @@ import plotly.graph_objects as go
 import folium
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
+import os
 
 st.set_page_config(layout="wide")
 
 st.title("🛢️ SCC Risk Assessment Tool")
 
 # =========================
-# FILE UPLOAD
+# FILE SELECTION OPTION
 # =========================
-uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
+st.sidebar.header("📂 Data Source")
 
-if uploaded_file is not None:
+file_option = st.sidebar.radio(
+    "Select Data Input Method:",
+    ["Use Default File (CM_Data1.xlsx)", "Upload New File"]
+)
 
-    # =========================
-    # LOAD DATA
-    # =========================
-    df = pd.read_excel(uploaded_file, engine="openpyxl")
+# =========================
+# LOAD DATA
+# =========================
+df = None
+
+if file_option == "Use Default File (CM_Data1.xlsx)":
+    file_path = "CM_Data1.xlsx"
+
+    if os.path.exists(file_path):
+        df = pd.read_excel(file_path, engine="openpyxl")
+        st.success("✅ Loaded default file: CM_Data1.xlsx")
+    else:
+        st.error("❌ Default file not found. Please upload manually.")
+
+elif file_option == "Upload New File":
+    uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
+
+    if uploaded_file is not None:
+        df = pd.read_excel(uploaded_file, engine="openpyxl")
+        st.success("✅ File uploaded successfully")
+
+# =========================
+# PROCESS DATA
+# =========================
+if df is not None:
+
     df.columns = df.columns.str.strip()
 
-    st.subheader("✅ Data Preview")
+    st.subheader("📄 Data Preview")
     st.dataframe(df.head())
 
     # =========================
@@ -45,7 +71,6 @@ if uploaded_file is not None:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # Convert stress %
     if 'Hoop stress% of SMYS' in df.columns:
         if df['Hoop stress% of SMYS'].max() < 10:
             df['Hoop stress% of SMYS'] *= 100
@@ -67,7 +92,7 @@ if uploaded_file is not None:
         df['Temperature'] < 40, 1, 10
     )
 
-    # ✅ Distance logic (your requirement)
+    # ✅ Your logic (<30 = 10, >30 = 1)
     df['Distance Score'] = np.where(
         df['Distance from Pump(KM)'] < 30, 10, 1
     )
@@ -114,7 +139,7 @@ if uploaded_file is not None:
     st.subheader("📊 Graph")
 
     plot_col = st.selectbox(
-        "Select Parameter for Graph",
+        "Select Parameter",
         [
             'Hoop stress% of SMYS',
             'Temperature',
@@ -133,7 +158,6 @@ if uploaded_file is not None:
         name=plot_col
     ))
 
-    # Stress limit
     if plot_col == 'Hoop stress% of SMYS':
         fig.add_hline(y=60, line_dash="dash")
 
@@ -150,13 +174,10 @@ if uploaded_file is not None:
     # =========================
     # DOWNLOAD
     # =========================
-    st.subheader("⬇️ Download Results")
+    st.subheader("⬇️ Download")
 
-    csv_full = df.to_csv(index=False).encode('utf-8')
-    csv_top50 = top50.to_csv(index=False).encode('utf-8')
-
-    st.download_button("Download Full Data", csv_full, "scc_full_data.csv")
-    st.download_button("Download Top 50", csv_top50, "scc_top50.csv")
+    st.download_button("Download Full Data", df.to_csv(index=False), "scc_full.csv")
+    st.download_button("Download Top 50", top50.to_csv(index=False), "scc_top50.csv")
 
     # =========================
     # MAP
@@ -188,4 +209,4 @@ if uploaded_file is not None:
         st_folium(m, width=1000, height=500)
 
     else:
-        st.warning("⚠️ LATITUDE & LONGITUDE not found in data")
+        st.warning("⚠️ LATITUDE & LONGITUDE not found")
